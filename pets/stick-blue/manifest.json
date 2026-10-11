@@ -1,0 +1,9 @@
+{
+  "id": "stick-blue",
+  "name": "Stick Blue",
+  "author": "PET-CREDITS contributors",
+  "license": "MIT",
+  "description": "A thick-line stick figure that holds up your Claude Code credits sign and runs around when you drag it.",
+  "color": "#3b82f6",
+  "stroke": 9
+}

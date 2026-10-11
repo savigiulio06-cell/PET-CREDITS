@@ -1,0 +1,10 @@
+{
+  "id": "stick-orange",
+  "name": "Stick Orange",
+  "author": "PET-CREDITS contributors",
+  "license": "MIT",
+  "description": "A thick-line stick figure that holds up your Claude Code credits sign and runs around when you drag it.",
+  "default": true,
+  "color": "#f28c28",
+  "stroke": 9
+}

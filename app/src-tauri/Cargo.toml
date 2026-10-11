@@ -1,0 +1,29 @@
+[package]
+name = "pet-credits"
+description = "Desktop pet that shows your Claude Code usage limits"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+# The installer (pet-core `install`) recognises its own hooks by this binary name.
+default-run = "pet-credits"
+
+[[bin]]
+name = "pet-credits"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+serde_json.workspace = true
+
+[dependencies]
+pet-core = { path = "../../crates/pet-core" }
+tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
+tauri-plugin-single-instance = "2"
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# Only for AttachConsole (CLI modes print to the parent console).
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console"] }

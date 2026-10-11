@@ -1,0 +1,2 @@
+{"type":"assistant","requestId":"req_a1","timestamp":"2026-10-11T10:20:00Z","isSidechain":true,"agentId":"a1","message":{"model":"claude-opus-4-1","usage":{"input_tokens":1000,"output_tokens":100}}}
+{"type":"assistant","requestId":"req_a1","timestamp":"2026-10-11T10:20:01Z","isSidechain":true,"agentId":"a1","message":{"model":"claude-opus-4-1","usage":{"input_tokens":1000,"output_tokens":200}}}

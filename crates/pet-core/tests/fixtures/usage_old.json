@@ -1,0 +1,8 @@
+{
+  "five_hour": {"utilization": 42.0, "resets_at": "2026-10-11T17:00:00Z", "extra_field": true},
+  "seven_day": {"utilization": 63.5, "resets_at": "2026-10-14T09:00:00+00:00"},
+  "seven_day_opus": {"utilization": 12.0, "resets_at": 1792000000},
+  "seven_day_sonnet": null,
+  "seven_day_oauth_apps": {"utilization": null, "resets_at": null},
+  "some_unknown_thing": {"foo": "bar"}
+}

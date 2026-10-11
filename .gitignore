@@ -1,0 +1,24 @@
+# Build
+/target/
+**/target/
+node_modules/
+dist/
+app/src-tauri/gen/
+
+# Secrets / local config: never commit
+.env
+.env.*
+*.pem
+*.key
+.credentials.json
+
+# Claude Code: internal agents, instructions and local state (never published)
+.claude/
+/CLAUDE.md
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log

@@ -1,0 +1,8 @@
+{"type":"user","timestamp":"2026-10-11T09:59:00Z","message":{"role":"user","content":"hello"}}
+{"type":"assistant","requestId":"req_1","timestamp":"2026-10-11T10:00:00Z","isSidechain":false,"message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+{"type":"assistant","requestId":"req_1","timestamp":"2026-10-11T10:00:01Z","isSidechain":false,"message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":50,"cache_creation_input_tokens":1000,"cache_read_input_tokens":2000}}}
+this line is not json at all
+{"type":"assistant","requestId":"req_2","timestamp":"2026-10-11T10:05:00Z","message":{"model":"claude-opus-4-1","usage":{"input_tokens":10,"output_tokens":20}}}
+{"type":"assistant","requestId":"req_syn","timestamp":"2026-10-11T10:06:00Z","message":{"model":"<synthetic>","usage":{"input_tokens":0,"output_tokens":0}}}
+{"type":"assistant","requestId":"req_s1","timestamp":"2026-10-11T10:10:00Z","isSidechain":true,"agentId":"side1","message":{"model":"claude-haiku-4-5","usage":{"input_tokens":5,"output_tokens":5}}}
+{"type":"system","timestamp":"2026-10-11T10:11:00Z","content":"assistant"}

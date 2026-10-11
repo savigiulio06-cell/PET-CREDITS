@@ -1,0 +1,18 @@
+[package]
+name = "pet-core"
+description = "Provider-agnostic usage/credit tracking for PET-CREDITS"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] }
+chrono.workspace = true
+thiserror.workspace = true
+dirs.workspace = true
+ureq.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

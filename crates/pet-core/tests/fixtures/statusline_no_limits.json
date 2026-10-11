@@ -1,0 +1,6 @@
+{
+  "session_id": "session-1",
+  "transcript_path": "/fake/home/.claude/projects/demo/session-1.jsonl",
+  "model": {"id": "claude-opus-4-1", "display_name": "Opus"},
+  "cost": {"total_cost_usd": 2.5}
+}
