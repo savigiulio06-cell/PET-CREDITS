@@ -20,7 +20,8 @@ const ACTIVE_WITHIN: Duration = Duration::from_secs(120);
 
 #[derive(Debug, Clone)]
 pub struct ClaudeConfig {
-    /// Query the usage API (needs Claude Code's OAuth login). Default: true.
+    /// Query the unofficial usage API (needs Claude Code's OAuth login).
+    /// Default: false (opt-in).
     pub use_api: bool,
     pub claude_home: PathBuf,
     pub bridge_path: PathBuf,
@@ -31,7 +32,7 @@ pub struct ClaudeConfig {
 impl Default for ClaudeConfig {
     fn default() -> Self {
         Self {
-            use_api: true,
+            use_api: false,
             claude_home: crate::paths::claude_home(),
             bridge_path: crate::paths::bridge_file(),
             last_usage_path: crate::paths::last_usage_file(),

@@ -6,7 +6,8 @@
 //!    default line if they had none.
 //!
 //! The chained command is the one the user themselves had configured in
-//! Claude Code; it is run exactly as Claude Code would run it, via the shell.
+//! Claude Code; it is run through the shell (`sh` on macOS/Linux; on Windows
+//! Git Bash if `CLAUDE_CODE_GIT_BASH_PATH` is set, otherwise `cmd`).
 
 use std::io::{Read, Write};
 use std::path::Path;
@@ -17,13 +18,27 @@ use super::{bridge, install};
 use crate::WindowKind;
 
 const CHAIN_TIMEOUT: Duration = Duration::from_secs(5);
+/// Set on the chained command. If the user's previous status line calls
+/// `pet-credits --statusline` again (directly or through a script), that
+/// nested run sees it and does not chain once more: no endless recursion.
+pub const CHAINED_ENV: &str = "PET_CREDITS_CHAINED";
 
 /// Handle one status-line invocation and return what should be printed.
 pub fn run(stdin_json: &str, bridge_path: &Path, app_home: &Path) -> String {
+    let nested = std::env::var_os(CHAINED_ENV).is_some();
+    run_with(stdin_json, bridge_path, app_home, nested)
+}
+
+/// [`run`] with the recursion guard made explicit (`nested` = we are already
+/// running inside a chained status line).
+pub fn run_with(stdin_json: &str, bridge_path: &Path, app_home: &Path, nested: bool) -> String {
     let data = bridge::from_statusline_input(stdin_json).ok();
     if let Some(d) = &data {
         // Best effort: a broken bridge must never break Claude's status line.
         let _ = bridge::write(bridge_path, d);
+    }
+    if nested {
+        return default_line(data.as_ref());
     }
     if let Some(cmd) = install::original_statusline_command(app_home) {
         if let Some(out) = run_chained(&cmd, stdin_json) {
@@ -86,6 +101,7 @@ fn shell_command(cmd: &str) -> Command {
 
 fn run_chained(cmd: &str, stdin_json: &str) -> Option<String> {
     let mut child = shell_command(cmd)
+        .env(CHAINED_ENV, "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -156,5 +172,47 @@ mod tests {
     fn garbage_input_does_not_panic() {
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(run("not json", &dir.path().join("b.json"), dir.path()), "");
+    }
+}
+
+#[cfg(test)]
+mod recursion_tests {
+    use super::*;
+    use crate::claude::install::InstallState;
+    use serde_json::json;
+
+    fn with_previous(dir: &Path, command: &str) {
+        let state = InstallState {
+            original_statusline: Some(json!({"type": "command", "command": command})),
+            installed_at: None,
+        };
+        std::fs::write(
+            dir.join("install-state.json"),
+            serde_json::to_string(&state).unwrap(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn nested_run_never_chains_again() {
+        let dir = tempfile::tempdir().unwrap();
+        // `echo` works in sh, Git Bash and cmd alike.
+        with_previous(dir.path(), "echo CHAINED");
+        let b = dir.path().join("b.json");
+        assert!(run_with("{}", &b, dir.path(), false).contains("CHAINED"));
+        assert!(!run_with("{}", &b, dir.path(), true).contains("CHAINED"));
+    }
+
+    #[test]
+    fn chained_command_sees_the_guard_variable() {
+        let dir = tempfile::tempdir().unwrap();
+        let probe = if cfg!(windows) && std::env::var_os("CLAUDE_CODE_GIT_BASH_PATH").is_none() {
+            "echo %PET_CREDITS_CHAINED%"
+        } else {
+            "echo $PET_CREDITS_CHAINED"
+        };
+        with_previous(dir.path(), probe);
+        let out = run_with("{}", &dir.path().join("b.json"), dir.path(), false);
+        assert_eq!(out.trim(), "1");
     }
 }

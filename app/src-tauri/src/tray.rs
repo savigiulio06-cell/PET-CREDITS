@@ -87,7 +87,7 @@ fn build_menu(app: &AppHandle, cfg: &Config) -> tauri::Result<Menu<Wry>> {
     let use_api = CheckMenuItem::with_id(
         app,
         "use_api",
-        "Usa dati dal server Anthropic (non ufficiale)",
+        "Dati live dal server Anthropic (non ufficiale, usa il login di Claude Code)",
         true,
         cfg.use_api,
         None::<&str>,

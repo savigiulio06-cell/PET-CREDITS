@@ -32,7 +32,9 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             variant: variants::default_id().into(),
-            use_api: true,
+            // Off until the user opts in: the usage endpoint is unofficial and
+            // uses Claude Code's login (see README, "Terms and risk").
+            use_api: false,
             position: None,
             lang: None,
         }

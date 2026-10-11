@@ -1,6 +1,6 @@
 //! Background polling thread around [`ClaudeProvider`].
 //!
-//! - Full poll (API allowed): every 30 s while Claude Code is active, every
+//! - Full poll (API allowed): every 60 s while Claude Code is active, every
 //!   300 s otherwise. The provider applies the 429 back-off by itself.
 //! - Local poll (bridge + transcripts, no network): as soon as the status-line
 //!   bridge file or the active transcript changes (checked every 2 s).
@@ -21,7 +21,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::state::AppState;
 
 const TICK: Duration = Duration::from_secs(2);
-const API_EVERY_ACTIVE: Duration = Duration::from_secs(30);
+const API_EVERY_ACTIVE: Duration = Duration::from_secs(60);
 const API_EVERY_IDLE: Duration = Duration::from_secs(300);
 /// "Aggiorna ora" within this gap of the last full poll only re-reads local files.
 const MIN_MANUAL_GAP: Duration = Duration::from_secs(5);

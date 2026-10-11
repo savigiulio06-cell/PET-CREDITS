@@ -6,7 +6,7 @@ Security is the project's first rule: if anything below is not true of the code,
 ## What it touches
 | What | Why | How |
 |---|---|---|
-| `~/.claude/.credentials.json` (macOS: Keychain item `Claude Code-credentials`, read with `/usr/bin/security`) | read the OAuth access token to ask Anthropic for your usage % (same data as Claude's settings page) | read-only, kept in memory only, sent **only** to `https://api.anthropic.com` (no redirects followed), never written, logged or refreshed. On macOS the Keychain asks for permission the first time; "Always Allow" lets PET-CREDITS read that item without asking again. |
+| `~/.claude/.credentials.json` (macOS: Keychain item `Claude Code-credentials`, read with `/usr/bin/security`) | read the OAuth access token to ask Anthropic for your usage % (same data as Claude's settings page) | read-only, kept in memory only, sent **only** to `https://api.anthropic.com` (no redirects followed), never written, logged or refreshed. On macOS the Keychain asks for permission the first time; the request comes from the system tool `/usr/bin/security`, so "Always Allow" lets *that tool*, and therefore any program you run that calls it, read the item without asking again: choose "Allow" if unsure. Only read when you turn on live usage (off by default). |
 | `~/.claude/projects/**/*.jsonl` | per-session / per-agent token counts | read-only |
 | `~/.claude/settings.json` | add a `SessionStart` hook and a status-line wrapper | only when you run `pet-credits --install` (or the tray item); see below |
 | `<config dir>/pet-credits/` | `config.json` (pet settings), `install-state.json` (your previous status-line command), `statusline-bridge.json` (usage %, session id, model, session cost and the path of the current transcript), `last-usage.json` (last usage percentages and reset times, so they survive a restart; no credentials) | files created with owner-only permissions (`0600` on Unix) |
@@ -15,23 +15,32 @@ Security is the project's first rule: if anything below is not true of the code,
 
 ### `--install` / `--uninstall`
 - `--install` writes into `settings.json` a `statusLine` and a `SessionStart` hook pointing to the
-  PET-CREDITS executable. It refuses to do so if the executable is in a temporary, removable or
-  other-user-writable location, or if its path contains characters a shell would interpret.
+  PET-CREDITS executable. It refuses to do so if the executable is in a temporary location
+  (system temp folder, `/tmp`, `/var/tmp`, `/dev/shm`, `/Volumes`, AppImage mounts, macOS app
+  translocation), if its path contains characters a shell would interpret, or, on macOS/Linux, if
+  the file or a folder above it is writable by group or others. On Windows folder permissions
+  are **not** checked: keep PET-CREDITS in its default per-user install folder
+  (`%LOCALAPPDATA%\PET-CREDITS`), not in a folder other users can write to.
 - Before every change a backup `settings.json.pet-credits-backup-<timestamp>` is saved next to it.
   Backups are never deleted automatically: remove them yourself when you no longer need them.
 - Writes are atomic, keep the file's permissions and key order, and follow symlinks.
 - `--uninstall` removes only PET-CREDITS's entries and restores your previous status line.
 - After install, on every status-line refresh `pet-credits --statusline` records the usage numbers
-  and then **runs your previous status-line command through the shell**, exactly as Claude Code did
-  before, passing it the same input.
+  and then **runs your previous status-line command through the shell** (`sh` on macOS/Linux; on
+  Windows Git Bash if `CLAUDE_CODE_GIT_BASH_PATH` is set, otherwise `cmd`), passing it the same input,
+  with a 5-second limit. The command is the one you had configured yourself; it is marked with
+  `PET_CREDITS_CHAINED=1` so that, if it calls PET-CREDITS again, nothing is chained twice.
+- Run `pet-credits --uninstall` (or "Scollega da Claude Code") **before** uninstalling the app,
+  otherwise `settings.json` keeps pointing to a missing executable.
 
 ## Network
-Only `https://api.anthropic.com/api/oauth/usage`, every 30 s while Claude Code is active and every
-5 minutes otherwise. Standard `HTTPS_PROXY` settings are honoured (the proxy cannot read the
+Only `https://api.anthropic.com/api/oauth/usage`, and only if you turn on live usage: every 60 s
+while Claude Code is active and every 5 minutes otherwise. Standard `HTTPS_PROXY` settings are honoured (the proxy cannot read the
 token: TLS is end-to-end). No telemetry, no analytics, no auto-update, no other hosts.
 
 The usage endpoint is **not officially documented** by Anthropic and may change or stop working.
-It is on by default; you can turn it off from the tray menu and rely on the status-line data only.
+It is **off by default**: turn it on from the menu ("Dati live dal server Anthropic") if you accept
+the risk described in the README, section "Terms and risk".
 
 ## Downloads
 Release binaries are built by GitHub Actions from the tagged source, without caches, and published
