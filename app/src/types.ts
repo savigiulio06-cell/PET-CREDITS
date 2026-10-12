@@ -50,7 +50,55 @@ export interface UsageSnapshot {
   issue: Issue | null;
 }
 
-/** Skin = a manifest only: the stick figure is drawn procedurally from these parameters. */
+/** Painted board of a standing pose, in that PNG's pixels; live numbers are drawn on top of it. */
+export interface SpriteSign {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Colour of the (blanked) board, used as the sign background. */
+  bg: string;
+}
+
+/** One sprite pose. Coordinates are in the PNG's pixels; `scale` = CSS px per PNG px. */
+export interface SpritePose {
+  /** File name as written in the manifest (only a lookup key, never used as a URL). */
+  src: string;
+  /** Bundled asset URL, resolved from the build-time glob (never from the manifest). */
+  url: string;
+  w: number;
+  h: number;
+  scale: number;
+  /** Point that sits on the ground (stage anchorX, GROUND); for `fly` the body centre. */
+  anchor: [number, number];
+  /** Standing poses only (idle, low). */
+  sign?: SpriteSign;
+  /** `land` only: where the fist hits the ground. */
+  impact?: [number, number];
+  /** Direction the sprite faces in the PNG. */
+  faces: 'left' | 'right';
+}
+
+export interface SpriteQuote {
+  text: string;
+  /** BCP 47 language tag of `text` (optional). */
+  lang?: string;
+}
+
+export interface SpriteSpec {
+  /** Stage x of the anchor of standing poses. */
+  anchorX: number;
+  poses: { idle: SpritePose; fly: SpritePose; low?: SpritePose; land?: SpritePose };
+  entrance: 'crash-landing' | 'none';
+  locomotion: 'fly' | 'none';
+  /** Used percentage at which the `low` pose (and quote) kicks in. */
+  lowThresholds: { session: number; weekly: number };
+  quotes: { greeting?: SpriteQuote; low?: SpriteQuote };
+}
+
+export type PetKind = 'stick' | 'sprite';
+
+/** Skin = a manifest. Stick skins are drawn procedurally; sprite skins use PNG poses. */
 export interface PetManifest {
   id: string;
   name: string;
@@ -65,6 +113,10 @@ export interface PetManifest {
   stroke: number;
   /** Head radius in px (optional). */
   head?: number;
+  /** Renderer: "stick" (default) or "sprite". */
+  kind: PetKind;
+  /** Present only when kind is "sprite" and the manifest is valid. */
+  sprite?: SpriteSpec;
 }
 
 /** Window position in physical pixels, as emitted by the backend on `pet-moved`. */

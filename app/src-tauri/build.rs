@@ -1,16 +1,26 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{env, fs};
 
-/// Collect `pets/*/manifest.json` (id + name) into a Rust table, so the tray
+/// Collect `pets/*/manifest.json` and, when present, the local-only
+/// `pets-local/*/manifest.json` (id + name) into a Rust table, so the tray
 /// menu always lists the skins that are bundled in the UI. A manifest with
 /// `"default": true` sorts first (it is the default skin); the rest by id.
 fn variants() -> Vec<(String, String)> {
-    let pets = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("../../pets");
-    println!("cargo:rerun-if-changed={}", pets.display());
+    let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let mut out: Vec<(bool, String, String)> = Vec::new();
-    let Ok(dirs) = fs::read_dir(&pets) else {
-        return Vec::new();
+    for sub in ["../../pets", "../../pets-local"] {
+        scan(&root.join(sub), &mut out);
+    }
+    out.sort();
+    out.into_iter().map(|(_, id, name)| (id, name)).collect()
+}
+
+/// Add every valid skin folder under `pets`; a missing folder is fine.
+fn scan(pets: &Path, out: &mut Vec<(bool, String, String)>) {
+    let Ok(dirs) = fs::read_dir(pets) else {
+        return;
     };
+    println!("cargo:rerun-if-changed={}", pets.display());
     for dir in dirs.flatten() {
         let manifest = dir.path().join("manifest.json");
         println!("cargo:rerun-if-changed={}", manifest.display());
@@ -29,6 +39,10 @@ fn variants() -> Vec<(String, String)> {
         {
             continue;
         }
+        // The same id in both folders is listed once (the UI also keeps the first one).
+        if out.iter().any(|o| o.1 == folder) {
+            continue;
+        }
         let name = json
             .get("name")
             .and_then(|n| n.as_str())
@@ -41,8 +55,6 @@ fn variants() -> Vec<(String, String)> {
             name.chars().take(40).collect::<String>(),
         ));
     }
-    out.sort();
-    out.into_iter().map(|(_, id, name)| (id, name)).collect()
 }
 
 fn main() {

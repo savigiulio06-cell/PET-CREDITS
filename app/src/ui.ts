@@ -56,6 +56,37 @@ function setRow(row: Row, win: UsageWindow | undefined, now: number): void {
   row.root.dataset.level = level;
 }
 
+/* compact variant: two rows painted on a sprite skin's board (hourglass 5h, calendar week) */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function icon(paths: string[]): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('class', 'c-icon');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.7');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  for (const d of paths) {
+    const p = document.createElementNS(SVG_NS, 'path');
+    p.setAttribute('d', d);
+    svg.append(p);
+  }
+  return svg;
+}
+
+const HOURGLASS = ['M3.5 1.5h9M3.5 14.5h9', 'M4.5 1.5c0 4 3.5 4.5 3.5 6.5S4.5 10.5 4.5 14.5', 'M11.5 1.5c0 4-3.5 4.5-3.5 6.5s3.5 2.5 3.5 6.5'];
+const CALENDAR = ['M2.5 3.5h11a1 1 0 0 1 1 1v8.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1z', 'M1.5 7h13', 'M5 1.5v3M11 1.5v3'];
+
+function makeCompactRow(paths: string[], label: string): { root: HTMLElement; pct: HTMLElement } {
+  const root = el('div', 'c-row');
+  const pct = el('span', 'c-pct', t.noValue);
+  root.append(icon(paths), el('span', 'c-lbl', label), pct);
+  return { root, pct };
+}
+
 export interface SignView {
   root: HTMLElement;
   update(snapshot: UsageSnapshot | null, now: number): void;
@@ -82,7 +113,12 @@ export function createSign(): SignView {
   const empty = el('div', 'empty');
   empty.append(el('div', 'empty-title', t.waiting), el('div', 'empty-hint', t.waitingHint));
 
-  root.append(badge, issue, rows, empty);
+  const compact = el('div', 'compact-rows');
+  const cSession = makeCompactRow(HOURGLASS, t.fiveHour);
+  const cWeekly = makeCompactRow(CALENDAR, t.weekly);
+  compact.append(cSession.root, cWeekly.root);
+
+  root.append(badge, issue, rows, empty, compact);
 
   return {
     root,
@@ -90,6 +126,14 @@ export function createSign(): SignView {
       const hasData = snapshot !== null && (snapshot.windows.length > 0 || snapshot.session !== null);
       root.classList.toggle('empty-state', !hasData);
       const loginIssue = snapshot?.issue === 'auth_expired' || snapshot?.issue === 'login_missing' ? snapshot.issue : null;
+      // compact rows: "—" when there is no data or it is stale
+      const fresh = hasData && snapshot !== null && !snapshot.stale && loginIssue === null;
+      const pctOf = (kind: string): string => {
+        const w = fresh ? snapshot?.windows.find((x) => x.kind === kind) : undefined;
+        return w ? `${Math.round(w.used_pct)}%` : t.noValue;
+      };
+      cSession.pct.textContent = pctOf('session');
+      cWeekly.pct.textContent = pctOf('weekly');
       issue.textContent = loginIssue ? t.issues[loginIssue] : '';
       root.classList.toggle('has-issue', loginIssue !== null);
       root.classList.toggle('stale', hasData && snapshot !== null && (snapshot.stale || loginIssue !== null));

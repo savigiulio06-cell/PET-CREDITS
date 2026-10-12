@@ -4,6 +4,7 @@ import { inTauri, setExpanded, startData } from './data';
 import { MotionTracker } from './motion';
 import { DEFAULT_VARIANT, getPet } from './pets';
 import { Rig } from './rig';
+import { SpriteCharacter } from './sprite';
 import { SIGN } from './layout';
 import { createPanel, createSign } from './ui';
 import { levelOf, parseTime } from './format';
@@ -41,10 +42,6 @@ if (!app) throw new Error('#app missing');
 const stage = document.createElement('div');
 stage.className = 'stage';
 const sign = createSign();
-sign.root.style.left = `${SIGN.x}px`;
-sign.root.style.top = `${SIGN.y}px`;
-sign.root.style.width = `${SIGN.w}px`;
-sign.root.style.height = `${SIGN.h}px`;
 const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 svg.setAttribute('class', 'rig');
 svg.setAttribute('aria-hidden', 'true');
@@ -52,12 +49,28 @@ const panel = createPanel();
 stage.append(sign.root, svg);
 app.append(stage, panel.root);
 
+applyStickSign();
 const motion = new MotionTracker();
 const rig = new Rig(svg, sign.root, motion);
+const sprite = new SpriteCharacter(stage, sign.root, motion);
+/** Id of the active sprite skin, or null while a stick skin is shown. */
+let spriteId: string | null = null;
 
 const reducedQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-rig.setReduced(reducedQuery.matches);
-reducedQuery.addEventListener('change', () => rig.setReduced(reducedQuery.matches));
+// While a sprite skin is active the rig is parked in its static (loop-less) mode.
+const syncReduced = (): void => {
+  rig.setReduced(reducedQuery.matches || spriteId !== null);
+  sprite.setReduced(reducedQuery.matches);
+};
+syncReduced();
+reducedQuery.addEventListener('change', syncReduced);
+
+function applyStickSign(): void {
+  sign.root.style.left = `${SIGN.x}px`;
+  sign.root.style.top = `${SIGN.y}px`;
+  sign.root.style.width = `${SIGN.w}px`;
+  sign.root.style.height = `${SIGN.h}px`;
+}
 
 if (inTauri()) {
   // the whole window is a drag handle (the sign, being interactive, is not)
@@ -71,7 +84,23 @@ function applyVariant(id: string, persist: boolean): void {
   for (const p of Array.from(app!.classList)) if (p.startsWith('v-')) app!.classList.remove(p);
   app!.classList.add(`v-${pet.id}`);
   app!.style.setProperty('--accent', pet.color);
-  rig.setStyle({ color: pet.color, stroke: pet.stroke, head: pet.head ?? 17 });
+  if (pet.kind === 'sprite' && pet.sprite) {
+    if (spriteId !== pet.id) {
+      spriteId = pet.id;
+      svg.style.display = 'none';
+      syncReduced();
+      sprite.activate(pet.sprite); // plays the entrance
+    }
+  } else {
+    if (spriteId !== null) {
+      sprite.deactivate();
+      spriteId = null;
+      svg.style.display = '';
+      applyStickSign();
+      syncReduced();
+    }
+    rig.setStyle({ color: pet.color, stroke: pet.stroke, head: pet.head ?? 17 });
+  }
   if (persist) persistVariant(pet.id);
 }
 
@@ -105,12 +134,15 @@ function render(): void {
   root.classList.remove(...STATE_CLASSES);
   root.classList.add(...classes);
   root.classList.toggle('expanded', expanded);
-  rig.setFlags({
-    sleeping: classes.includes('sleeping'),
-    warn: classes.includes('warn'),
-    critical: classes.includes('critical'),
-    working: classes.includes('working'),
-  });
+  sprite.setSnapshot(snapshot);
+  if (spriteId === null) {
+    rig.setFlags({
+      sleeping: classes.includes('sleeping'),
+      warn: classes.includes('warn'),
+      critical: classes.includes('critical'),
+      working: classes.includes('working'),
+    });
+  }
 }
 
 function toggleExpanded(): void {
@@ -153,6 +185,7 @@ void startData({
   },
   onMoved(x, y) {
     motion.push(x, y);
+    sprite.wake();
   },
 }).then(() => {
   if (!inTauri() && query.get('expanded') === '1') toggleExpanded();

@@ -157,6 +157,24 @@ Each skin is a folder `pets/<id>/manifest.json`. Included: `stick-blue`, `stick-
 | `head` | no | head radius in px |
 | `default` | no | `true` to make it the default skin |
 
+### Sprite skins
+
+A skin is a stick figure by default. With `"kind": "sprite"` it is drawn from PNG poses instead, placed next to `manifest.json`. Extra fields:
+
+| Field | Meaning |
+|---|---|
+| `kind` | `"stick"` (default) or `"sprite"` |
+| `anchorX` | stage x (px) where standing poses are anchored |
+| `poses` | `idle` and `fly` are required; `low` and `land` are optional (`low` falls back to `idle`) |
+| `entrance` | `"crash-landing"` plays the landing sequence at start |
+| `locomotion` | `"fly"` shows the `fly` pose while the window is dragged |
+| `lowThresholds` | `{ "session": 90, "weekly": 70 }`: used percentage that switches to the `low` pose |
+| `quotes` | optional `greeting` and `low` speech bubbles: `{ "text": "...", "lang": "en" }` |
+
+Each pose has `src` (PNG file name), `w`, `h` (PNG size), `scale` (CSS px per PNG px) and `anchor` (the point on the ground; the body centre for `fly`). `idle` and `low` also have `sign`, the rectangle of the painted board (`x`, `y`, `w`, `h`, `bg`) where the live numbers are drawn; `land` has `impact` (where the fist hits the ground); `fly` can set `faces` (`"left"` or `"right"`).
+
+Skins in `pets-local/` are picked up the same way as the ones in `pets/`, but that folder is gitignored and is bundled only into builds made on the machine that has it. Do not distribute builds that include `pets-local`.
+
 ## License
 
 [MIT](LICENSE).

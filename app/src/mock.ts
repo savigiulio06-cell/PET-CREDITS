@@ -1,8 +1,8 @@
-// Invented browser-only fixtures (?mock=ok|warn|critical|stale|nodata|working|auth_expired).
+// Invented browser-only fixtures (?mock=ok|low|warn|critical|stale|nodata|working|auth_expired).
 import type { UsageSnapshot, AgentUsage, UsageWindow } from './types';
 
-export type MockKind = 'ok' | 'warn' | 'critical' | 'stale' | 'nodata' | 'working' | 'auth_expired';
-export const MOCK_KINDS: readonly MockKind[] = ['ok', 'warn', 'critical', 'stale', 'nodata', 'working', 'auth_expired'];
+export type MockKind = 'ok' | 'low' | 'warn' | 'critical' | 'stale' | 'nodata' | 'working' | 'auth_expired';
+export const MOCK_KINDS: readonly MockKind[] = ['ok', 'low', 'warn', 'critical', 'stale', 'nodata', 'working', 'auth_expired'];
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -84,6 +84,10 @@ export function mockSnapshot(kind: MockKind, now = Date.now()): UsageSnapshot {
   };
 
   switch (kind) {
+    case 'low':
+      // session 93% (>= 90) trips the sprite skins' "low credits" pose
+      base.windows = windows(93, 41, 30, now);
+      break;
     case 'warn':
       base.windows = windows(86, 72, 64, now);
       base.session!.tokens = { input: 90_000, output: 410_000, cache_creation: 900_000, cache_read: 4_100_000 };
