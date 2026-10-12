@@ -11,6 +11,7 @@ use tauri::{include_image, AppHandle, Emitter, Manager, Wry};
 use crate::cli;
 use crate::config::Config;
 use crate::poller::Cmd;
+use crate::prefs;
 use crate::state::AppState;
 use crate::variants;
 use crate::window;
@@ -59,6 +60,23 @@ fn build_tray(app: &AppHandle, menu: &Menu<Wry>) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Re-read the two saved choices into the menu's check marks (after the
+/// first-run card changed them).
+pub fn sync_checks(app: &AppHandle) {
+    let Some(menu) = app.state::<AppState>().menu.get().cloned() else {
+        return;
+    };
+    let cfg = app.state::<AppState>().config();
+    for (id, on) in [
+        ("use_api", cfg.use_api),
+        ("show_with_claude", cfg.show_with_claude),
+    ] {
+        if let Some(item) = menu.get(id).and_then(|k| k.as_check_menuitem().cloned()) {
+            let _ = item.set_checked(on);
+        }
+    }
+}
+
 /// Create the menu and register its (app-wide) event handler, which serves
 /// both the tray and the popup on the pet.
 fn build_menu(app: &AppHandle, cfg: &Config) -> tauri::Result<Menu<Wry>> {
@@ -92,6 +110,14 @@ fn build_menu(app: &AppHandle, cfg: &Config) -> tauri::Result<Menu<Wry>> {
         cfg.use_api,
         None::<&str>,
     )?;
+    let show_with_claude = CheckMenuItem::with_id(
+        app,
+        "show_with_claude",
+        "Mostra quando si apre Claude",
+        true,
+        cfg.show_with_claude,
+        None::<&str>,
+    )?;
     let status = MenuItem::with_id(
         app,
         "status",
@@ -114,7 +140,18 @@ fn build_menu(app: &AppHandle, cfg: &Config) -> tauri::Result<Menu<Wry>> {
     let menu = Menu::with_items(
         app,
         &[
-            &toggle, &look, &refresh, &use_api, &s1, &status, &install, &uninstall, &s2, &s3, &quit,
+            &toggle,
+            &look,
+            &refresh,
+            &use_api,
+            &show_with_claude,
+            &s1,
+            &status,
+            &install,
+            &uninstall,
+            &s2,
+            &s3,
+            &quit,
         ],
     )?;
 
@@ -128,8 +165,11 @@ fn build_menu(app: &AppHandle, cfg: &Config) -> tauri::Result<Menu<Wry>> {
             }
             "use_api" => {
                 let on = use_api.is_checked().unwrap_or(true);
-                state.update_config(|c| c.use_api = on);
-                let _ = state.poller.send(Cmd::SetUseApi(on));
+                prefs::set_live_usage(app, on);
+            }
+            "show_with_claude" => {
+                let on = show_with_claude.is_checked().unwrap_or(true);
+                prefs::set_show_with_claude(app, on);
             }
             "install" | "uninstall" => {
                 let app = app.clone();

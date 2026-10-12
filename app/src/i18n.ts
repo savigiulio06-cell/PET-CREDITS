@@ -22,6 +22,15 @@ const it = {
   requests: 'rich.',
   estimateHint: 'costi stimati a prezzi API',
   signHint: 'Clic per i dettagli',
+  loginError: "Impossibile cambiare l'avvio automatico: scelta ripristinata",
+  liveHint: "Usi l'app desktop o un IDE? Attiva i dati live dal menu",
+  onboarding: {
+    title: 'Benvenuto!',
+    show: 'Mostrami quando apri Claude',
+    live: 'Dati live dal server Anthropic (non ufficiale, usa il tuo login di Claude Code)',
+    liveNote: "Funziona anche con l'app desktop e gli IDE. L'endpoint non è ufficiale: vedi README, \"Terms and risk\".",
+    ok: 'OK',
+  },
   issues: {
     auth_expired: 'Accesso scaduto: apri claude nel terminale e scrivi un messaggio',
     login_missing: 'Nessun accesso: apri claude nel terminale ed esegui il login',
@@ -59,6 +68,15 @@ const en: Strings = {
   requests: 'req.',
   estimateHint: 'costs estimated at API prices',
   signHint: 'Click for details',
+  loginError: 'Could not change start at login: choice restored',
+  liveHint: 'Using the desktop app or an IDE? Turn on live usage from the menu',
+  onboarding: {
+    title: 'Welcome!',
+    show: 'Show me when you open Claude',
+    live: "Live usage from Anthropic's server (unofficial, uses your Claude Code login)",
+    liveNote: 'Works with the desktop app and IDEs too. The endpoint is unofficial, see README "Terms and risk".',
+    ok: 'OK',
+  },
   issues: {
     auth_expired: 'Login expired: open claude in the terminal and send a message',
     login_missing: 'Not logged in: open claude in the terminal and log in',

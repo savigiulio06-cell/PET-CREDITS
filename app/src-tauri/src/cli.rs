@@ -22,6 +22,10 @@ Uso: pet-credits [OPZIONE]
   --help              mostra questo aiuto
 ";
 
+/// Argument given to the process started by `--ensure-running`. `dispatch`
+/// ignores it (the app starts normally).
+pub const HOOK_ARG: &str = "--from-hook";
+
 /// Handle a CLI mode if `args` (without the program name) asks for one.
 /// Returns the process exit code, or `None` to start the app normally.
 pub fn dispatch(args: &[String]) -> Option<i32> {
@@ -78,7 +82,9 @@ fn spawn_detached() -> std::io::Result<()> {
     use std::process::{Command, Stdio};
 
     let mut cmd = Command::new(std::env::current_exe()?);
-    cmd.stdin(Stdio::null())
+    // Lets the running instance tell a hook start from a manual launch.
+    cmd.arg(HOOK_ARG)
+        .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     #[cfg(windows)]
@@ -138,7 +144,7 @@ fn install_mode(do_install: bool) -> i32 {
 
 /// Our own executable, canonical, without the Windows `\\?\` prefix (the
 /// command line written into settings.json must work in cmd.exe/PowerShell).
-fn current_exe_clean() -> Result<PathBuf, String> {
+pub fn current_exe_clean() -> Result<PathBuf, String> {
     let exe = std::env::current_exe()
         .and_then(|p| p.canonicalize())
         .map_err(|_| "impossibile determinare il percorso dell'eseguibile".to_string())?;
@@ -263,5 +269,7 @@ mod tests {
     fn unknown_args_start_the_app() {
         assert_eq!(dispatch(&[]), None);
         assert_eq!(dispatch(&["-psn_0_12345".to_string()]), None);
+        assert_eq!(dispatch(&[HOOK_ARG.to_string()]), None);
+        assert_eq!(dispatch(&["--standby".to_string()]), None);
     }
 }

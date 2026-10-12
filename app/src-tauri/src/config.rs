@@ -24,6 +24,10 @@ pub struct Config {
     pub variant: String,
     pub use_api: bool,
     pub position: Option<Position>,
+    /// The first-run card has been answered (or skipped, see `from_json`).
+    pub onboarded: bool,
+    /// Start at login in standby and show the pet whenever Claude is open.
+    pub show_with_claude: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
 }
@@ -36,6 +40,10 @@ impl Default for Config {
             // uses Claude Code's login (see README, "Terms and risk").
             use_api: false,
             position: None,
+            onboarded: false,
+            // Off until the user ticks it on the first-run card or in the menu:
+            // it writes a login entry.
+            show_with_claude: false,
             lang: None,
         }
     }
@@ -60,6 +68,16 @@ impl Config {
         if let Some(b) = map.get("use_api").and_then(Value::as_bool) {
             cfg.use_api = b;
         }
+        if let Some(b) = map.get("show_with_claude").and_then(Value::as_bool) {
+            cfg.show_with_claude = b;
+        }
+        // Upgrade rule: no `onboarded` flag (new or older install) means the
+        // first-run card is shown once to everybody. Nothing (use_api, login
+        // entry) changes until the user presses OK.
+        cfg.onboarded = map
+            .get("onboarded")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         if let Some(p) = map.get("position") {
             cfg.position = serde_json::from_value(p.clone()).ok();
         }
@@ -111,12 +129,34 @@ mod tests {
     }
 
     #[test]
+    fn onboarding_flag_and_upgrade_rule() {
+        // No file / old config without live usage: the card is shown once.
+        assert!(!Config::default().onboarded);
+        assert!(!Config::from_json(r#"{"use_api":false}"#).onboarded);
+        assert!(!Config::from_json(r#"{"variant":"x"}"#).onboarded);
+        // Old config with live usage on: the card is still shown once, and
+        // nothing is changed behind the user's back.
+        let c = Config::from_json(r#"{"use_api":true}"#);
+        assert!(!c.onboarded);
+        assert!(c.use_api); // kept: the card pre-ticks it
+        assert!(!c.show_with_claude); // never enabled without a choice
+                                      // An explicit flag always wins.
+        assert!(Config::from_json(r#"{"use_api":false,"onboarded":true}"#).onboarded);
+        assert!(!Config::from_json(r#"{"use_api":true,"onboarded":false}"#).onboarded);
+        assert!(Config::from_json(r#"{"use_api":true,"onboarded":true}"#).onboarded);
+        assert!(Config::from_json(r#"{"show_with_claude":true}"#).show_with_claude);
+        assert!(!Config::from_json(r#"{"show_with_claude":"yes"}"#).show_with_claude);
+    }
+
+    #[test]
     fn roundtrip_via_disk() {
         let dir = std::env::temp_dir().join(format!("pet-credits-cfg-{}", std::process::id()));
         let cfg = Config {
             variant: variants::VARIANTS.last().map_or("", |v| v.0).into(),
             use_api: false,
             position: Some(Position { x: -5, y: 40 }),
+            onboarded: true,
+            show_with_claude: true,
             lang: None,
         };
         cfg.save(&dir).unwrap();

@@ -1,6 +1,7 @@
 //! Shared application state (managed by Tauri).
 
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::Sender;
 use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
 
@@ -20,6 +21,13 @@ pub struct AppState {
     pub moved: Sender<()>,
     /// The pet menu, also opened by a right click on the pet (set once the menu is built).
     pub menu: OnceLock<Menu<Wry>>,
+    /// The window was shown by the Claude watcher (or the SessionStart hook), so
+    /// the watcher may hide it again. Cleared by every manual show.
+    pub auto_shown: AtomicBool,
+    /// Claude is considered open (set by the presence watcher, read by the poller).
+    pub claude_open: AtomicBool,
+    /// The last attempt to change the login entry failed (shown in the details panel).
+    pub login_error: AtomicBool,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -36,6 +44,9 @@ impl AppState {
             poller,
             moved,
             menu: OnceLock::new(),
+            auto_shown: AtomicBool::new(false),
+            claude_open: AtomicBool::new(false),
+            login_error: AtomicBool::new(false),
         }
     }
 

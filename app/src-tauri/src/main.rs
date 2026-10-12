@@ -3,12 +3,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod autostart;
 mod cli;
 mod config;
 mod poller;
+mod prefs;
 mod state;
 mod tray;
 mod variants;
+mod watch;
 mod window;
 
 fn main() {

@@ -9,6 +9,7 @@ pub mod error;
 pub mod fsutil;
 pub mod model;
 pub mod paths;
+pub mod presence;
 pub mod provider;
 
 pub use error::{Error, Result};

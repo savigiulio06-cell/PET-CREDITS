@@ -1,12 +1,12 @@
 import './style.css';
 import { invoke } from '@tauri-apps/api/core';
-import { inTauri, setExpanded, startData } from './data';
+import { completeOnboarding, inTauri, setExpanded, startData } from './data';
 import { MotionTracker } from './motion';
 import { DEFAULT_VARIANT, getPet } from './pets';
 import { Rig } from './rig';
 import { SpriteCharacter } from './sprite';
 import { SIGN } from './layout';
-import { createPanel, createSign } from './ui';
+import { createOnboarding, createPanel, createSign } from './ui';
 import { levelOf, parseTime } from './format';
 import type { UsageSnapshot } from './types';
 
@@ -18,6 +18,10 @@ const STORAGE_KEY = 'pet-credits.variant';
 let snapshot: UsageSnapshot | null = null;
 let activity = false;
 let expanded = false;
+/** The live-usage option is on (for the "turn it on" hint). */
+let liveUsage = false;
+/** Changing the start-at-login entry failed (note in the details panel). */
+let loginError = false;
 
 function readStored(): string | null {
   try {
@@ -46,7 +50,16 @@ const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 svg.setAttribute('class', 'rig');
 svg.setAttribute('aria-hidden', 'true');
 const panel = createPanel();
-stage.append(sign.root, svg);
+const onboarding = createOnboarding((show, live) => {
+  void completeOnboarding(show, live).then((ok) => {
+    // On failure the card stays so the user can try again.
+    if (!ok) return;
+    liveUsage = live;
+    closeOnboarding();
+    render();
+  });
+});
+stage.append(sign.root, svg, onboarding.root);
 app.append(stage, panel.root);
 
 applyStickSign();
@@ -65,6 +78,16 @@ const syncReduced = (): void => {
 syncReduced();
 reducedQuery.addEventListener('change', syncReduced);
 
+function openOnboarding(live: boolean): void {
+  sign.root.inert = true; // the pet behind the card takes no focus or clicks
+  onboarding.open(live);
+}
+
+function closeOnboarding(): void {
+  sign.root.inert = false;
+  onboarding.close();
+}
+
 function applyStickSign(): void {
   sign.root.style.left = `${SIGN.x}px`;
   sign.root.style.top = `${SIGN.y}px`;
@@ -74,7 +97,7 @@ function applyStickSign(): void {
 
 if (inTauri()) {
   // the whole window is a drag handle (the sign, being interactive, is not)
-  for (const n of [document.documentElement, document.body, app, stage, svg]) n.setAttribute('data-tauri-drag-region', '');
+  for (const n of [document.documentElement, document.body, app, stage, svg, onboarding.root]) n.setAttribute('data-tauri-drag-region', '');
 }
 
 /* ------------------------------------------------------------ render */
@@ -127,8 +150,8 @@ const STATE_CLASSES = ['idle', 'working', 'warn', 'critical', 'sleeping'];
 
 function render(): void {
   const now = Date.now();
-  sign.update(snapshot, now);
-  panel.update(snapshot);
+  sign.update(snapshot, now, liveUsage);
+  panel.update(snapshot, liveUsage, loginError);
   const classes = petState(now);
   const root = app!;
   root.classList.remove(...STATE_CLASSES);
@@ -186,6 +209,19 @@ void startData({
   onMoved(x, y) {
     motion.push(x, y);
     sprite.wake();
+  },
+  onPrefs(p) {
+    liveUsage = p.liveUsage;
+    loginError = p.loginError;
+    if (p.onboarded) closeOnboarding();
+    else openOnboarding(p.liveUsage);
+    render();
+  },
+  onAppear() {
+    // Claude just opened and the pet was shown: sprite skins replay their entrance,
+    // stick skins simply appear.
+    const spec = spriteId === null ? undefined : getPet(spriteId)?.sprite;
+    if (spec) sprite.activate(spec);
   },
 }).then(() => {
   if (!inTauri() && query.get('expanded') === '1') toggleExpanded();

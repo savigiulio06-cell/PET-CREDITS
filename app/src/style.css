@@ -452,6 +452,80 @@ body {
   transition: opacity var(--sign-fade, 0.25s) ease, visibility 0s linear var(--sign-fade, 0.25s);
 }
 
+/* ===== first-run card (covers the stage; sits above the pet and the sign) ===== */
+.onboarding {
+  position: absolute;
+  inset: 8px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border: 2.5px solid var(--accent);
+  border-radius: 12px;
+  background: var(--sign-bg);
+  color: var(--sign-fg);
+  box-shadow: var(--sign-shadow);
+  font-size: 12px;
+  line-height: 1.25;
+  overflow: hidden;
+}
+
+.onboarding[hidden] {
+  display: none;
+}
+
+.onb-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.onb-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.onb-row input {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.onb-row input:focus-visible,
+.onb-ok:focus-visible {
+  outline: 2px solid #5b7cfa;
+  outline-offset: 2px;
+}
+
+.onb-note {
+  margin: -2px 0 0 23px;
+  font-size: 10.5px;
+  color: var(--sign-muted);
+}
+
+.onb-ok {
+  align-self: flex-end;
+  margin-top: auto;
+  min-width: 72px;
+  padding: 5px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.onb-ok:hover {
+  filter: brightness(1.08);
+}
+
 /* ===== detail panel ===== */
 .panel {
   display: none;

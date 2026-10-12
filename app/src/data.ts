@@ -10,6 +10,18 @@ export interface DataHandlers {
   onActivity(active: boolean): void;
   /** Window position in physical px, one call per `pet-moved` event. */
   onMoved(x: number, y: number): void;
+  /** Saved choices (first-run card, menu toggles). */
+  onPrefs(prefs: Prefs): void;
+  /** The backend just showed the pet because Claude opened. */
+  onAppear(): void;
+}
+
+export interface Prefs {
+  onboarded: boolean;
+  liveUsage: boolean;
+  showWithClaude: boolean;
+  /** Changing the login entry failed and the choice was reset. */
+  loginError: boolean;
 }
 
 export const inTauri = (): boolean => '__TAURI_INTERNALS__' in window;
@@ -31,6 +43,18 @@ export function normalizeSnapshot(raw: unknown): UsageSnapshot | null {
     stale: r.stale === true,
     note: typeof r.note === 'string' ? r.note : null,
     issue: normalizeIssue(r.issue),
+  };
+}
+
+/** Defensive parse of the backend's `get_prefs` / `prefs-changed` payload. */
+function normalizePrefs(raw: unknown): Prefs | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  return {
+    onboarded: r.onboarded === true,
+    liveUsage: r.live_usage === true,
+    showWithClaude: r.show_with_claude === true,
+    loginError: r.login_error === true,
   };
 }
 
@@ -62,6 +86,11 @@ export async function startData(h: DataHandlers): Promise<void> {
       if (typeof e.payload === 'string') h.onVariant(e.payload);
     });
     await listen<boolean>('activity', (e) => h.onActivity(e.payload === true));
+    await listen('pet-appear', () => h.onAppear());
+    await listen<unknown>('prefs-changed', (e) => {
+      const p = normalizePrefs(e.payload);
+      if (p) h.onPrefs(p);
+    });
     await listen<MovedPayload>('pet-moved', (e) => {
       const p = e.payload;
       if (typeof p === 'object' && p !== null && typeof p.x === 'number' && typeof p.y === 'number') h.onMoved(p.x, p.y);
@@ -74,6 +103,12 @@ export async function startData(h: DataHandlers): Promise<void> {
       // keep the locally remembered skin
     }
     try {
+      const prefs = normalizePrefs(await invoke<unknown>('get_prefs'));
+      if (prefs) h.onPrefs(prefs);
+    } catch {
+      // older backend: no card, hint stays off
+    }
+    try {
       h.onSnapshot(normalizeSnapshot(await invoke<unknown>('get_snapshot')));
     } catch {
       h.onSnapshot(null);
@@ -84,6 +119,13 @@ export async function startData(h: DataHandlers): Promise<void> {
   const params = new URLSearchParams(window.location.search);
   const raw = params.get('mock') ?? 'ok';
   const kind = (MOCK_KINDS as readonly string[]).includes(raw) ? (raw as MockKind) : 'ok';
+  // Browser preview: ?onboarding=1 shows the first-run card, ?live=1 pretends live usage is on.
+  h.onPrefs({
+    onboarded: params.get('onboarding') !== '1',
+    liveUsage: params.get('live') === '1',
+    showWithClaude: true,
+    loginError: false,
+  });
   h.onSnapshot(mockSnapshot(kind));
   if (kind === 'working') h.onActivity(true);
   if (params.get('drag') === '1') startMockDrag(h);
@@ -119,6 +161,20 @@ function startMockDrag(h: DataHandlers): void {
     }
     if (now > 4.5) window.clearInterval(timer);
   }, 16);
+}
+
+/**
+ * Saves the first-run card's answers. The backend validates (two booleans),
+ * applies them once and answers with `prefs-changed`; resolves to false if it failed.
+ */
+export async function completeOnboarding(showWithClaude: boolean, liveUsage: boolean): Promise<boolean> {
+  if (!inTauri()) return true;
+  try {
+    await invoke('complete_onboarding', { showWithClaude, liveUsage });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Tells the backend which window size is wanted (320x280 compact, 320x460 expanded). */

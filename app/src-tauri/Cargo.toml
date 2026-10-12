@@ -20,6 +20,10 @@ serde_json.workspace = true
 pet-core = { path = "../../crates/pet-core" }
 tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-single-instance = "2"
+# Login entry (Windows current user only, macOS LaunchAgent, Linux XDG autostart).
+auto-launch = "0.6"
+# Process names only (to notice the Claude app / CLI); no disks, network, users.
+sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true

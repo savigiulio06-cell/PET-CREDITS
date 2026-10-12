@@ -1,11 +1,13 @@
 //! Placement, resizing and position persistence of the pet window.
 
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
 
-use tauri::{AppHandle, Manager, Monitor, PhysicalPosition, PhysicalSize, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, Monitor, PhysicalPosition, PhysicalSize, WebviewWindow};
 
 use crate::config::Position;
+use crate::poller::Cmd;
 use crate::state::AppState;
 
 pub const LABEL: &str = "main";
@@ -20,8 +22,18 @@ pub fn main_window(app: &AppHandle) -> Option<WebviewWindow> {
     app.get_webview_window(LABEL)
 }
 
-/// Show, un-minimize and focus the pet (tray click, second instance).
+pub fn is_visible(app: &AppHandle) -> bool {
+    main_window(app).is_some_and(|w| w.is_visible().unwrap_or(false))
+}
+
+/// Manual show (tray click / menu / manual launch): un-minimize and focus the
+/// pet and refresh the numbers (the poller ignores it within a few seconds of
+/// the last poll). A pet the user opened by hand is never hidden by the Claude
+/// watcher.
 pub fn show_main(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    state.auto_shown.store(false, Ordering::Relaxed);
+    let _ = state.poller.send(Cmd::RefreshNow);
     if let Some(w) = main_window(app) {
         let _ = w.show();
         let _ = w.unminimize();
@@ -30,11 +42,50 @@ pub fn show_main(app: &AppHandle) {
 }
 
 pub fn toggle_main(app: &AppHandle) {
-    if let Some(w) = main_window(app) {
-        if w.is_visible().unwrap_or(false) {
+    if is_visible(app) {
+        app.state::<AppState>()
+            .auto_shown
+            .store(false, Ordering::Relaxed);
+        if let Some(w) = main_window(app) {
             let _ = w.hide();
-        } else {
-            show_main(app);
+        }
+    } else {
+        show_main(app);
+    }
+}
+
+/// Automatic show (Claude opened, SessionStart hook): no focus stealing. Only
+/// acts on a hidden window; returns whether it did. Tells the UI (`pet-appear`)
+/// so sprite skins replay their entrance.
+pub fn show_auto(app: &AppHandle) -> bool {
+    let Some(w) = main_window(app) else {
+        return false;
+    };
+    if w.is_visible().unwrap_or(false) {
+        // Already there, maybe minimized: bring it back without taking focus.
+        if w.is_minimized().unwrap_or(false) {
+            let _ = w.unminimize();
+        }
+        return false;
+    }
+    app.state::<AppState>()
+        .auto_shown
+        .store(true, Ordering::Relaxed);
+    let _ = w.show();
+    let _ = w.unminimize();
+    let _ = app.emit("pet-appear", ());
+    true
+}
+
+/// Hide the pet after Claude went away, but only if it was shown automatically.
+pub fn hide_if_auto(app: &AppHandle) {
+    let was_auto = app
+        .state::<AppState>()
+        .auto_shown
+        .swap(false, Ordering::Relaxed);
+    if was_auto {
+        if let Some(w) = main_window(app) {
+            let _ = w.hide();
         }
     }
 }
@@ -76,12 +127,15 @@ fn initial_position(w: &WebviewWindow, saved: Option<Position>) -> Option<Physic
     ))
 }
 
-/// Position the window (it is created hidden) and show it.
-pub fn place_and_show(w: &WebviewWindow, saved: Option<Position>) {
+/// Position the window (it is created hidden); `show` = false keeps it hidden
+/// (`--standby`).
+pub fn place(w: &WebviewWindow, saved: Option<Position>, show: bool) {
     if let Some(pos) = initial_position(w, saved) {
         let _ = w.set_position(pos);
     }
-    let _ = w.show();
+    if show {
+        let _ = w.show();
+    }
 }
 
 /// 320x280 (compact) or 320x460 (expanded), keeping the bottom edge in place.

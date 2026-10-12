@@ -224,10 +224,27 @@ impl ClaudeProvider {
     }
 
     fn session(&self, b: Option<&bridge::BridgeData>) -> Option<SessionUsage> {
-        let file = b
-            .and_then(|b| self.bridge_session(b))
-            .or_else(|| transcripts::find_latest_session(&self.projects_dir()))?;
+        // The bridge only knows terminal sessions: a newer transcript (e.g. from
+        // the desktop app or an IDE) must win over an old bridge session.
+        let file = newest(
+            b.and_then(|b| self.bridge_session(b)),
+            transcripts::find_latest_session(&self.projects_dir()),
+        )?;
         transcripts::summarize(&file).ok()
+    }
+}
+
+/// The more recently modified of two optional files; `a` wins ties and
+/// unreadable timestamps.
+fn newest(a: Option<PathBuf>, b: Option<PathBuf>) -> Option<PathBuf> {
+    let mtime = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    match (a, b) {
+        (Some(a), Some(b)) => match (mtime(&a), mtime(&b)) {
+            (Some(ta), Some(tb)) if tb > ta => Some(b),
+            (None, Some(_)) => Some(b),
+            _ => Some(a),
+        },
+        (a, b) => a.or(b),
     }
 }
 
@@ -265,6 +282,41 @@ impl UsageProvider for ClaudeProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn newest_prefers_the_most_recently_modified_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir.path().join("old.jsonl");
+        let new = dir.path().join("new.jsonl");
+        std::fs::write(&old, "{}").unwrap();
+        std::fs::write(&new, "{}").unwrap();
+        let now = SystemTime::now();
+        let set = |p: &Path, t: SystemTime| {
+            std::fs::File::options()
+                .write(true)
+                .open(p)
+                .unwrap()
+                .set_modified(t)
+                .unwrap();
+        };
+        set(&old, now - Duration::from_secs(86_400));
+        set(&new, now);
+
+        // Old bridge transcript vs newer desktop-app transcript: the newer wins.
+        assert_eq!(
+            newest(Some(old.clone()), Some(new.clone())),
+            Some(new.clone())
+        );
+        // Bridge transcript is the freshest: it stays.
+        assert_eq!(
+            newest(Some(new.clone()), Some(old.clone())),
+            Some(new.clone())
+        );
+        // Only one side present.
+        assert_eq!(newest(None, Some(old.clone())), Some(old));
+        assert_eq!(newest(Some(new.clone()), None), Some(new));
+        assert_eq!(newest(None, None), None);
+    }
 
     #[test]
     fn rate_limit_blocks_api_until_retry_after() {

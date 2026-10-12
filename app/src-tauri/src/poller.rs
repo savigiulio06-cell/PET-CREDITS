@@ -1,7 +1,9 @@
 //! Background polling thread around [`ClaudeProvider`].
 //!
-//! - Full poll (API allowed): every 60 s while Claude Code is active, every
-//!   300 s otherwise. The provider applies the 429 back-off by itself.
+//! - Full poll (API allowed): every 60 s while Claude Code is active and the
+//!   pet is visible, every 300 s otherwise (also while the pet is hidden). While
+//!   the pet is hidden and Claude is not open, no API call is made at all
+//!   (except when the user asks). The provider applies the 429 back-off by itself.
 //! - Local poll (bridge + transcripts, no network): as soon as the status-line
 //!   bridge file or the active transcript changes (checked every 2 s).
 //!
@@ -10,6 +12,7 @@
 //! This module never touches the network or credentials itself.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -19,6 +22,7 @@ use pet_core::UsageProvider;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::state::AppState;
+use crate::window;
 
 const TICK: Duration = Duration::from_secs(2);
 const API_EVERY_ACTIVE: Duration = Duration::from_secs(60);
@@ -120,8 +124,11 @@ fn run(app: AppHandle, rx: Receiver<Cmd>, use_api: bool) {
     let mut force_local = false;
 
     loop {
+        // The user asked for this poll (menu): allowed even while the pet is hidden.
+        let mut user_forced = false;
         match rx.recv_timeout(TICK) {
             Ok(Cmd::RefreshNow) => {
+                user_forced = true;
                 if last_full.is_none_or(|t| t.elapsed() >= MIN_MANUAL_GAP) {
                     force_full = true;
                 } else {
@@ -131,6 +138,7 @@ fn run(app: AppHandle, rx: Receiver<Cmd>, use_api: bool) {
             Ok(Cmd::SetUseApi(on)) => {
                 provider.set_use_api(on);
                 if on {
+                    user_forced = true;
                     force_full = true;
                 } else {
                     force_local = true;
@@ -144,14 +152,18 @@ fn run(app: AppHandle, rx: Receiver<Cmd>, use_api: bool) {
         let changed = stamp != last_stamp;
         last_stamp = stamp;
 
-        let every = if active {
+        let hidden = !window::is_visible(&app);
+        let quiet = hidden && !app.state::<AppState>().claude_open.load(Ordering::Relaxed);
+        let every = if active && !hidden {
             API_EVERY_ACTIVE
         } else {
             API_EVERY_IDLE
         };
-        let due = last_full.is_none_or(|t| t.elapsed() >= every);
+        // Hidden and no Claude open: nobody is looking, skip the network.
+        let due = !quiet && last_full.is_none_or(|t| t.elapsed() >= every);
+        let full = due || (force_full && (!quiet || user_forced));
 
-        let snap = if force_full || due {
+        let snap = if full {
             force_full = false;
             force_local = false;
             last_full = Some(Instant::now());

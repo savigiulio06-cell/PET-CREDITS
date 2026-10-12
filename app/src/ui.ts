@@ -89,7 +89,8 @@ function makeCompactRow(paths: string[], label: string): { root: HTMLElement; pc
 
 export interface SignView {
   root: HTMLElement;
-  update(snapshot: UsageSnapshot | null, now: number): void;
+  /** `live`: the live-usage option is on (decides whether the "turn it on" hint is useful). */
+  update(snapshot: UsageSnapshot | null, now: number, live: boolean): void;
 }
 
 export function createSign(): SignView {
@@ -111,7 +112,9 @@ export function createSign(): SignView {
   rows.append(session.root, weekly.root, scoped, chat);
 
   const empty = el('div', 'empty');
-  empty.append(el('div', 'empty-title', t.waiting), el('div', 'empty-hint', t.waitingHint));
+  const emptyTitle = el('div', 'empty-title', t.waiting);
+  const emptyHint = el('div', 'empty-hint', t.waitingHint);
+  empty.append(emptyTitle, emptyHint);
 
   const compact = el('div', 'compact-rows');
   const cSession = makeCompactRow(HOURGLASS, t.fiveHour);
@@ -122,9 +125,15 @@ export function createSign(): SignView {
 
   return {
     root,
-    update(snapshot, now) {
+    update(snapshot, now, live) {
       const hasData = snapshot !== null && (snapshot.windows.length > 0 || snapshot.session !== null);
-      root.classList.toggle('empty-state', !hasData);
+      // No limit windows and no live usage: the status line never ran (desktop app, IDE),
+      // so say how to get numbers instead of "waiting".
+      const needsLive = !live && (snapshot === null || snapshot.windows.length === 0);
+      emptyTitle.textContent = needsLive ? t.liveHint : t.waiting;
+      emptyHint.textContent = needsLive ? '' : t.waitingHint;
+      emptyHint.hidden = needsLive;
+      root.classList.toggle('empty-state', !hasData || needsLive);
       const loginIssue = snapshot?.issue === 'auth_expired' || snapshot?.issue === 'login_missing' ? snapshot.issue : null;
       // compact rows: "—" when there is no data or it is stale
       const fresh = hasData && snapshot !== null && !snapshot.stale && loginIssue === null;
@@ -137,7 +146,7 @@ export function createSign(): SignView {
       issue.textContent = loginIssue ? t.issues[loginIssue] : '';
       root.classList.toggle('has-issue', loginIssue !== null);
       root.classList.toggle('stale', hasData && snapshot !== null && (snapshot.stale || loginIssue !== null));
-      if (!hasData || snapshot === null) return;
+      if (!hasData || snapshot === null || needsLive) return;
 
       setRow(session, snapshot.windows.find((w) => w.kind === 'session'), now);
       setRow(weekly, snapshot.windows.find((w) => w.kind === 'weekly'), now);
@@ -166,7 +175,7 @@ export function createSign(): SignView {
 
 export interface PanelView {
   root: HTMLElement;
-  update(snapshot: UsageSnapshot | null): void;
+  update(snapshot: UsageSnapshot | null, live: boolean, loginError: boolean): void;
 }
 
 export function createPanel(): PanelView {
@@ -184,7 +193,7 @@ export function createPanel(): PanelView {
 
   return {
     root,
-    update(snapshot) {
+    update(snapshot, live, loginError) {
       if (!snapshot) {
         source.textContent = `${t.source}: ${t.sources.none}`;
         updated.textContent = '';
@@ -220,9 +229,74 @@ export function createPanel(): PanelView {
           }),
         );
       }
-      const detail = [snapshot.issue ? t.issues[snapshot.issue] : '', snapshot.note ?? ''].filter(Boolean).join(' · ');
+      const needsLive = !live && snapshot.windows.length === 0;
+      const detail = [snapshot.issue ? t.issues[snapshot.issue] : '', needsLive ? t.liveHint : '', loginError ? t.loginError : '', snapshot.note ?? '']
+        .filter(Boolean)
+        .join(' · ');
       note.textContent = detail;
       note.hidden = !detail;
+    },
+  };
+}
+
+/* ------------------------------------------------------------ first-run card */
+
+export interface OnboardingView {
+  root: HTMLElement;
+  /** Show the card (Show me: on; Live usage: pre-ticked with `live`, the current setting) and focus the first box. */
+  open(live: boolean): void;
+  close(): void;
+}
+
+function checkRow(id: string, text: string, checked: boolean): { row: HTMLLabelElement; box: HTMLInputElement } {
+  const row = el('label', 'onb-row');
+  const box = el('input');
+  box.type = 'checkbox';
+  box.id = id;
+  box.checked = checked;
+  row.append(box, el('span', 'onb-text', text));
+  return { row, box };
+}
+
+/** `onDone` gets the two answers when the user presses OK. Text is only ever set with textContent. */
+export function createOnboarding(onDone: (showWithClaude: boolean, liveUsage: boolean) => void): OnboardingView {
+  const root = el('div', 'onboarding');
+  root.hidden = true;
+  root.setAttribute('role', 'dialog');
+  root.setAttribute('aria-modal', 'true');
+  root.setAttribute('aria-labelledby', 'onb-title');
+
+  const title = el('div', 'onb-title', t.onboarding.title);
+  title.id = 'onb-title';
+  const show = checkRow('onb-show', t.onboarding.show, true);
+  const live = checkRow('onb-live', t.onboarding.live, false);
+  const note = el('div', 'onb-note', t.onboarding.liveNote);
+  const ok = el('button', 'onb-ok', t.onboarding.ok);
+  ok.type = 'button';
+  ok.addEventListener('click', () => onDone(show.box.checked, live.box.checked));
+  root.append(title, show.row, live.row, note, ok);
+
+  // Keep Tab inside the card (the pet behind it is inert).
+  root.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return;
+    const items = [show.box, live.box, ok];
+    const i = items.indexOf(document.activeElement as HTMLInputElement | HTMLButtonElement);
+    const next = e.shiftKey ? (i <= 0 ? items.length - 1 : i - 1) : i === items.length - 1 ? 0 : i + 1;
+    e.preventDefault();
+    items[next]?.focus();
+  });
+
+  return {
+    root,
+    open(liveNow) {
+      if (!root.hidden) return; // already open: keep what the user has ticked
+      show.box.checked = true;
+      live.box.checked = liveNow;
+      root.hidden = false;
+      show.box.focus();
+    },
+    close() {
+      root.hidden = true;
     },
   };
 }
